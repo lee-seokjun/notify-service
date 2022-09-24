@@ -1,9 +1,10 @@
 package com.example.notifyservice.service;
 
-import com.example.notifyservice.config.CacheConfig;
+import com.example.notifyservice.dto.AlertDto;
 import com.example.notifyservice.elastic.Alert;
 import com.example.notifyservice.elastic.AlertRepository;
 import com.example.notifyservice.vo.RequestAlert;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -15,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @Service
+@Slf4j
 public class ServerSentService implements IServerSentService{
     private final AlertRepository repository;
     private final Map<String, Sinks.Many> sinks;
@@ -34,7 +36,7 @@ public class ServerSentService implements IServerSentService{
     }
 
     @Override
-    public Mono<Alert> save(RequestAlert request ) {
+    public Mono<Alert> save(AlertDto request ) {
         ModelMapper modelMapper = new ModelMapper();
         Alert alert = modelMapper.map(request,Alert.class);
         alert.setAlertId(UUID.randomUUID().toString());
@@ -45,7 +47,8 @@ public class ServerSentService implements IServerSentService{
         }
         else
         {
-            return repository.save(alert).doOnNext(c -> sinks.get(request.getToUser()).tryEmitNext(c));
+            return repository.save(alert).doOnNext(
+                    c ->  sinks.get(request.getToUser()).tryEmitNext(c));
         }
     }
 

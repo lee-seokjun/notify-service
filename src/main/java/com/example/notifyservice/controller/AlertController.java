@@ -1,9 +1,11 @@
 package com.example.notifyservice.controller;
 
+import com.example.notifyservice.dto.AlertDto;
 import com.example.notifyservice.elastic.Alert;
 import com.example.notifyservice.service.IServerSentService;
 import com.example.notifyservice.vo.RequestAlert;
 
+import org.modelmapper.ModelMapper;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
 
@@ -34,7 +36,7 @@ public class AlertController {
     }
     @PostMapping("/alert")
     public Mono<Alert> save(@RequestBody  RequestAlert request){
-        return service.save(request);
+        return service.save(new ModelMapper().map(request, AlertDto.class));
     }
     @DeleteMapping("/alert/{alertId}")
     public Mono<Void> delete(@PathVariable String alertId){
