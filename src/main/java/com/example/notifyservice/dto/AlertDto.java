@@ -10,4 +10,10 @@ public class AlertDto {
     private String fromUser;
     private String message;
     private boolean readFlag;
+
+    public AlertDto(String toUser, String fromUser, String message) {
+        this.toUser = toUser;
+        this.fromUser = fromUser;
+        this.message = message;
+    }
 }

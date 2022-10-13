@@ -5,12 +5,15 @@ import com.example.notifyservice.elastic.Alert;
 import com.example.notifyservice.elastic.AlertRepository;
 import com.example.notifyservice.vo.RequestAlert;
 import lombok.extern.slf4j.Slf4j;
+import org.infinispan.Cache;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -19,10 +22,14 @@ import java.util.UUID;
 @Slf4j
 public class ServerSentService implements IServerSentService{
     private final AlertRepository repository;
-    private final Map<String, Sinks.Many> sinks;
-    public ServerSentService(AlertRepository repository) {
+//    private final Map<String, Sinks.Many> sinks;
+    Cache<String, SseEmitter> sseEmitterCache;
+    Cache<String, String> sseEventCache;
+
+    public ServerSentService(AlertRepository repository, Cache<String, SseEmitter> sseEmitterCache, Cache<String, String> sseEventCache) {
         this.repository = repository;
-        sinks= new HashMap<>();
+        this.sseEmitterCache = sseEmitterCache;
+        this.sseEventCache = sseEventCache;
     }
 
     @Override
@@ -41,26 +48,38 @@ public class ServerSentService implements IServerSentService{
         Alert alert = modelMapper.map(request,Alert.class);
         alert.setAlertId(UUID.randomUUID().toString());
         String toUser = request.getToUser();
-        if(   sinks.get(toUser) ==null)
-        {
-            return   repository.save(alert);
-        }
-        else
-        {
-            return repository.save(alert).doOnNext(
-                    c ->  sinks.get(request.getToUser()).tryEmitNext(c));
-        }
+        return repository.save(alert).doOnNext(
+                    c -> {
+                        sseEmitterCache.forEach(
+                                (key,emitter) ->
+                                {
+                                    if( key.startsWith(toUser+"_"))
+                                    {
+                                        SseEmitter.SseEventBuilder event = emitter.event()
+                                                .data(c);
+                                        try {
+                                            emitter.send(event);
+                                        }catch(IOException | IllegalStateException e){
+                                            log.error(e.getMessage());
+                                            sseEmitterCache.remove(key);
+                                        }
+                                    }
+
+                                }
+
+
+                        );
+
+                    }
+                    );
+
     }
 
     @Override
-    public Sinks.Many getSink(String userId) {
-        Sinks.Many sink;
-        if(   sinks.get(userId) ==null) {
-            sink = Sinks.many().multicast().onBackpressureBuffer();
-            sinks.put(userId,sink);
-        }else {
-             sink = sinks.get(userId);
-        }
-        return sink;
+    public Mono<SseEmitter> getSink(String userId) {
+        SseEmitter  sseEmitter = new SseEmitter( 10l * 60l * 1000l);
+        String eventName = userId+"_"+System.currentTimeMillis();
+        sseEmitterCache.put(eventName, sseEmitter);
+        return Mono.just(sseEmitter);
     }
 }
