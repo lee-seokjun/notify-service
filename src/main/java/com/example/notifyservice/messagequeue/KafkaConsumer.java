@@ -11,6 +11,7 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -24,7 +25,7 @@ public class KafkaConsumer {
         this.service = service;
     }
 
-    @KafkaListener(topics = "sse-alert-topic")
+    @KafkaListener(topics = "message-send")
     public void createAlert(String kafkaMessage){
         log.info("kafka Message : ->" + kafkaMessage );
         Map<Object,Object> map = new HashMap<>();
@@ -35,11 +36,17 @@ public class KafkaConsumer {
         }catch(JsonProcessingException x){
             x.printStackTrace();
         }
-        AlertDto alertDto =new AlertDto();
-        alertDto.setMessage((String) map.get("message"));
-        alertDto.setFromUser((String) map.get("fromUser"));
-        alertDto.setToUser((String) map.get("toUser"));
-         service.save(alertDto).subscribe();
+        String users = (String) map.get("toUsers") ;
+        String senderId = (String) map.get("senderId") ;
+        String message = (String) map.get("message") ;
+        String fromUser = (String) map.get("fromUser") ;
+        Arrays.stream(users.split(","))
+                .filter(v->!v.equals(senderId))
+                .forEach(v->
+                        service.save(new AlertDto(v,senderId,message)).subscribe()
+        );
+
+
 
 
     }
